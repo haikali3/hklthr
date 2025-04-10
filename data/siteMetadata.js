@@ -1,6 +1,6 @@
 /** @type {import("pliny/config").PlinyConfig } */
 const siteMetadata = {
-  title: 'Software Engineer - Haikal Tahar ',
+  title: 'Haikal T. - Software Engineer',
   author: 'Haikal Tahar',
   headerTitle: 'Haikal Tahar',
   description:
