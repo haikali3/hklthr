@@ -4,7 +4,7 @@ const siteMetadata = {
   author: 'Haikal Tahar',
   headerTitle: 'Haikal Tahar',
   description:
-    'I love building things that people enjoy using — whether it’s websites, apps, or anything that looks good and works well. I mostly work with React, Next.js, Golang, and PostgreSQL. Always open to new opportunities and happy to chat about projects or ideas.',
+    '✲ reach me at haikaltahar@gmail.com. i like building things people enjoy using. open to new opportunities or collabs',
   language: 'en-us',
   theme: 'system', // system, dark or light
   siteUrl: 'https://haikal.dev',
