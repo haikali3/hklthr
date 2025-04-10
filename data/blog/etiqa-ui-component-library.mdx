@@ -1,0 +1,108 @@
+---
+title: 'Building UI Components at Etiqa — Lessons from Storybook, CSS-in-TS, and Why We Didn’t Use Tailwind'
+date: '2025-04-10'
+lastmod: '2025-04-10'
+tags: ['react', 'storybook', 'css-in-ts', 'design-system', 'component-library']
+draft: false
+summary: 'My experience at Etiqa building UI components in React using Storybook. Why we went with CSS-in-TS instead of Tailwind, what we learned from shadcn, Radix, Mantine — and the hidden overhead nobody talks about.'
+---
+
+## Introduction
+
+Spent a year at Etiqa building UI components in React. Used Storybook as our playground and chose CSS-in-TS over Tailwind. Here's what worked, what sucked, and what we learned from open-source giants like shadcn/ui, Radix UI, and Mantine.
+
+## Table of Contents
+
+- [Tech Stack](#tech-stack)
+- [Why CSS-in-TS Instead of Tailwind?](#why-css-in-ts-instead-of-tailwind)
+  - [Reasons We Chose It](#reasons-we-chose-it)
+  - [What Inspired Us](#what-inspired-us)
+  - [Example](#example)
+- [Pain Points](#pain-points)
+  - [High Maintenance Cost](#high-maintenance-cost)
+  - [Design-Token Drift](#design-token-drift)
+  - [Scaling Problems](#scaling-problems)
+- [Takeaways](#takeaways)
+  - [What We’d Do Again](#what-wed-do-again)
+  - [What We’d Reconsider](#what-wed-reconsider)
+- [Conclusion](#conclusion)
+
+## Tech Stack
+
+- **React + Storybook** for all UI work
+- **CSS-in-TS** using `styled-components` / `vanilla-extract` (depends on context)
+- **No Tailwind** — here’s why ↓
+
+## Why CSS-in-TS Instead of Tailwind?
+
+### Reasons We Chose It
+
+- Props + styles in the same file = better co-location
+- Dynamic styling (based on props/state) was easier
+- Theme-aware design tokens integrated well (colors, spacing, breakpoints)
+- Better control over specificity vs utility classes
+
+### What Inspired Us
+
+- Looked at how **shadcn/ui**, **Radix**, and **Mantine** structured components
+- Noticed most of them abstracted styling logic cleanly
+- Wanted similar control + flexibility
+- Didn’t want to fight Tailwind on edge cases
+
+### Example
+
+```tsx
+// button.tsx
+export const Button = styled.button(({ variant, theme }) => ({
+  backgroundColor: variant === 'primary' ? theme.colors.blue : theme.colors.gray,
+  padding: theme.spacing.md,
+  borderRadius: theme.radius.sm,
+}))
+```
+
+vs
+
+```tsx
+// tailwind version
+<button className="rounded bg-blue-500 px-4 py-2" />
+```
+
+## Pain Points
+
+### High Maintenance Cost
+
+- Every style change = component rebuild + Storybook test + app re-check
+- Theming logic sometimes too abstract
+- Onboarding new devs took longer without Tailwind familiarity
+
+### Design-Token Drift
+
+- Needed good sync between design tokens and component logic
+- If design team changed a spacing or color token, had to update in multiple places
+
+### Scaling Problems
+
+- Every new component added more surface area to maintain
+- Needed strict PR reviews to avoid styling hacks creeping in
+
+## Takeaways
+
+### What We’d Do Again
+
+- Co-located styles and logic helped long term
+- Storybook was essential — helped catch bugs early
+- CSS-in-TS gave us full control over themes + props
+
+### What We’d Reconsider
+
+- Tailwind + shadcn might be a better middle ground now
+- Less setup, better DX, more community support
+- CSS-in-TS shines when you need deep control — but that comes with a price
+
+## Conclusion
+
+Building a component library looks simple on the surface.
+
+But once you go past buttons and modals, it gets complex fast — theming, tokens, docs, consistency, accessibility, etc.
+
+Our CSS-in-TS setup worked for us at Etiqa, but wouldn't recommend it blindly. Evaluate your needs, your team, and your appetite for long-term maintenance.
