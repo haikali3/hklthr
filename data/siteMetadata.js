@@ -3,7 +3,8 @@ const siteMetadata = {
   title: 'Haikal Tahar`s Blog',
   author: 'Haikal Tahar',
   headerTitle: 'Haikal Tahar',
-  description: 'A blog created with Next.js and Tailwind.css',
+  description:
+    'I love building things that people enjoy using — whether it’s websites, or anything that looks good and works well.',
   language: 'en-us',
   theme: 'system', // system, dark or light
   siteUrl: 'https://tailwind-nextjs-starter-blog.vercel.app',
