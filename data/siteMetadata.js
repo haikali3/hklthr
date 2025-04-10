@@ -1,31 +1,31 @@
 /** @type {import("pliny/config").PlinyConfig } */
 const siteMetadata = {
-  title: 'Haikal Tahar`s Blog',
+  title: 'Software Engineer - Haikal Tahar ',
   author: 'Haikal Tahar',
   headerTitle: 'Haikal Tahar',
   description:
-    'I love building things that people enjoy using — whether it’s websites, or anything that looks good and works well.',
+    'I love building things that people enjoy using — whether it’s websites, apps, or anything that looks good and works well. I mostly work with React, Next.js, Golang, and PostgreSQL. Always open to new opportunities and happy to chat about projects or ideas.',
   language: 'en-us',
   theme: 'system', // system, dark or light
-  siteUrl: 'https://tailwind-nextjs-starter-blog.vercel.app',
-  siteRepo: 'https://github.com/timlrx/tailwind-nextjs-starter-blog',
+  siteUrl: 'https://haikal.dev',
+  siteRepo: 'https://haikal.dev',
   siteLogo: `${process.env.BASE_PATH || ''}/static/images/logo.png`,
   socialBanner: `${process.env.BASE_PATH || ''}/static/images/twitter-card.png`,
-  mastodon: 'https://mastodon.social/@mastodonuser',
-  email: 'address@yoursite.com',
-  github: 'https://github.com',
+  // mastodon: 'https://mastodon.social/@mastodonuser',
+  email: 'haikaltahar@gmail.com',
+  github: 'https://github.com/haikali3',
   x: 'https://twitter.com/x',
   // twitter: 'https://twitter.com/Twitter',
-  facebook: 'https://facebook.com',
-  youtube: 'https://youtube.com',
-  linkedin: 'https://www.linkedin.com',
-  threads: 'https://www.threads.net',
-  instagram: 'https://www.instagram.com',
-  medium: 'https://medium.com',
-  bluesky: 'https://bsky.app/',
+  // facebook: 'https://facebook.com',
+  // youtube: 'https://youtube.com',
+  linkedin: 'https://www.linkedin.com/in/haikaltahar',
+  // threads: 'https://www.threads.net',
+  // instagram: 'https://www.instagram.com',
+  // medium: 'https://medium.com',
+  // bluesky: 'https://bsky.app/',
   locale: 'en-US',
   // set to true if you want a navbar fixed to the top
-  stickyNav: false,
+  stickyNav: true,
   analytics: {
     // If you want to use an analytics provider you have to add it to the
     // content security policy in the `next.config.js` file.
