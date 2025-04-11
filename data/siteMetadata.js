@@ -4,7 +4,7 @@ const siteMetadata = {
   author: 'Haikal Tahar',
   headerTitle: 'Haikal Tahar',
   description:
-    '✲ reach me at haikaltahar@gmail.com. i like building things people enjoy using. open to new opportunities or collabs',
+    'reach me at haikaltahar@gmail.com. i like building things people enjoy using. open to new opportunities or collabs',
   language: 'en-us',
   theme: 'system', // system, dark or light
   siteUrl: 'https://haikal.dev',
