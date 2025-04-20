@@ -1,5 +1,5 @@
 ---
-title: 'Building an AI Wrapper with Zero AI Knowledge: My First Real Dive into LLMs'
+title: 'Building an AI Wrapper with Zero AI Knowledge'
 date: '2025-04-20'
 lastmod: '2025-04-20'
 tags: ['ai', 'llm', 'gemini', 'image2image', 'reflection', 'project']
@@ -25,11 +25,12 @@ this doc covers what i learned, what failed, and what i plan to do next.
 
 ## 1. Discovery Phase
 
-i went into OpenAI’s playground.  
-found out models like **gpt-4 turbo with vision and image gen aren’t public via API**.  
+i went into [OpenAI’s Model Docs](https://platform.openai.com/docs/models).  
+found out models like **gpt-4o with image gen aren’t public via API**.  
 so i switched to public models like **`gpt-4.1-mini`**. not ideal, but good enough to start.
+i didn’t find any OpenAI model as good as `gpt-4o` image generation.
 
-i started by showing an image on the frontend.  
+i started by showing an image on the frontend.
 then experimented with **text2text APIs** to describe the product.  
 built a basic **`/image2text` endpoint** using **Gemini 2.0 Flash**.  
 gave it an image. got a caption back.
