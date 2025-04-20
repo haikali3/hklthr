@@ -1,4 +1,8 @@
 {
+  "career": 1,
+  "mindset": 1,
+  "growth": 1,
+  "reflection": 2,
   "react": 1,
   "storybook": 1,
   "css-in-ts": 1,
@@ -15,7 +19,6 @@
   "github": 1,
   "writings": 1,
   "book": 1,
-  "reflection": 1,
   "holiday": 1,
   "canada": 1,
   "images": 1,

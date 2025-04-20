@@ -1,0 +1,106 @@
+---
+title: 'Building an AI Wrapper with Zero AI Knowledge: My First Real Dive into LLMs'
+date: '2025-04-20'
+lastmod: '2025-04-20'
+tags: ['ai', 'llm', 'gemini', 'image2image', 'reflection', 'project']
+draft: false
+summary: 'i started knowing nothing about AI. just wanted to swap product logos on images. ended up learning about multimodal models, prompt engineering, and how tricky image editing with LLMs actually is.'
+---
+
+## Introduction
+
+i started this project knowing nothing about AI.  
+just wanted a simple button that changes a brand logo on a product.  
+then i tried OpenAI, Gemini, and comfyUI. it spiraled into an unexpected journey.  
+this doc covers what i learned, what failed, and what i plan to do next.
+
+## Table of Contents
+
+- [1. Discovery Phase](#1-discovery-phase)
+- [2. Messing with Modalities](#2-messing-with-modalities)
+- [3. Real Progress](#3-real-progress)
+- [4. Retrospective](#4-retrospective)
+- [5. What to Improve Next](#5-what-to-improve-next)
+- [6. Future Plans](#6-future-plans)
+
+## 1. Discovery Phase
+
+i went into OpenAI’s playground.  
+found out models like **gpt-4 turbo with vision and image gen aren’t public via API**.  
+so i switched to public models like **`gpt-4.1-mini`**. not ideal, but good enough to start.
+
+i started by showing an image on the frontend.  
+then experimented with **text2text APIs** to describe the product.  
+built a basic **`/image2text` endpoint** using **Gemini 2.0 Flash**.  
+gave it an image. got a caption back.
+
+captions weren’t enough. i needed more control.  
+read through the [Gemini docs](https://ai.google.dev/gemini-api/docs/models).  
+found out there's a big difference between **"image understanding" and "image editing"**.
+
+i also realized **Gemini 2.5 exists only in the chat UI**.  
+API still limited to 2.0 Flash.
+
+tried using Gemini’s **safety settings**.  
+set everything to `BLOCK_NONE`, but it still filtered results.  
+not reliable or consistent.
+
+## 2. Messing with Modalities
+
+i tried different types of models and prompts.
+
+- **`text2text`** worked for basic generation
+- **`image2text`** gave limited captions
+- **`text2image`** generated images, but not specific enough
+
+what i actually needed was **image editing**.  
+i wanted to upload an image and **modify a specific region**, like changing a logo.  
+turns out that’s an **image-to-image task with prompt conditioning**.  
+Gemini API couldn’t handle this directly.
+
+## 3. Real Progress
+
+i shared a sample output here:  
+https://x.com/haikaldev/status/1913178531380556164
+
+the product image was edited with a new logo.  
+but the model placed a **smiley face on the wrong part** of the image.  
+that’s when i learned **prompt quality and input cleanup really matter**.  
+clearing the input text sometimes gave better results.
+
+thanks to [\_zuhairsan](https://x.com/_zuhairsan) for showing me **comfyUI** and how to use **Gemini 2.0 Flash** more effectively.
+
+## 4. Retrospective
+
+### what worked
+
+- **hands-on experiments**
+- **building reusable backend API wrappers**
+- clean **frontend/backend structure** in one monorepo
+- realizing that **AI image editing isn’t magic** — it’s trial, error, and prompt tuning
+
+### what didn’t
+
+- i expected Gemini to behave consistently. it didn’t
+- i thought safety settings would loosen up content filters. they didn’t
+- i assumed the 2.5 API was available. it wasn’t
+- i believed text2img could handle specific edits. it couldn’t
+
+## 5. What to Improve Next
+
+- try **ComfyUI workflows** to chain modules: mask → brand overlay → render
+- test **Gemini 2.0 Flash vs Stable Diffusion XL** for editing
+- run local inference using tools like **InvokeAI** or **Fooocus**
+- add UI to **draw bounding boxes** and turn them into masks for edits
+- build **fallback logic** to retry prompts when outputs are wrong
+- make a **dynamic prompt builder** so users can say “add logo to shirt only, not face”
+
+## 6. Future Plans
+
+- support **uploading multiple images**
+- let users **pick logos or brands** from a preset
+- build a **draggable brand gallery**
+- add **undo and redo** support
+- let users **download the edited image**
+- **log prompt and output history** for debugging
+- **open-source** the project once it’s stable
