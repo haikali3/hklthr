@@ -38,7 +38,7 @@ captions weren’t enough. i needed more control.
 read through the [Gemini docs](https://ai.google.dev/gemini-api/docs/models).  
 found out there's a big difference between **"image understanding" and "image editing"**.
 
-i also realized **Gemini 2.5 exists only in the chat UI**.  
+i also realized Gemini 2.5 Pro exists only in the **chat UI**.  
 API still limited to 2.0 Flash.
 
 tried using Gemini’s **safety settings**.  
@@ -77,30 +77,30 @@ thanks to [\_zuhairsan](https://x.com/_zuhairsan) for showing me **comfyUI** and
 - **hands-on experiments**
 - **building reusable backend API wrappers**
 - clean **frontend/backend structure** in one monorepo
-- realizing that **AI image editing isn’t magic** — it’s trial, error, and prompt tuning
+- realizing that **AI image editing isn’t magic** → it’s trial, error, and prompt tuning
 
 ### what didn’t
 
 - i expected Gemini to behave consistently. it didn’t
 - i thought safety settings would loosen up content filters. they didn’t
-- i assumed the 2.5 API was available. it wasn’t
+- i assumed the Gemini 2.5 Pro API was available. it wasn’t
 - i believed text2img could handle specific edits. it couldn’t
 
 ## 5. What to Improve Next
 
-- try **ComfyUI workflows** to chain modules: mask → brand overlay → render
-- test **Gemini 2.0 Flash vs Stable Diffusion XL** for editing
-- run local inference using tools like **InvokeAI** or **Fooocus**
-- add UI to **draw bounding boxes** and turn them into masks for edits
-- build **fallback logic** to retry prompts when outputs are wrong
-- make a **dynamic prompt builder** so users can say “add logo to shirt only, not face”
+- try ComfyUI workflows to chain modules: mask → brand overlay → render
+- test Gemini 2.0 Flash vs Stable Diffusion XL for editing
+- run local inference using tools like InvokeAI or Fooocus
+- add UI to draw bounding boxes and turn them into masks for edits
+- build fallback logic to retry prompts when outputs are wrong
+- make a dynamic prompt builder so users can say “add logo to shirt only, not face”
 
 ## 6. Future Plans
 
-- support **uploading multiple images**
-- let users **pick logos or brands** from a preset
-- build a **draggable brand gallery**
-- add **undo and redo** support
-- let users **download the edited image**
-- **log prompt and output history** for debugging
-- **open-source** the project once it’s stable
+- support uploading multiple images
+- let users pick logos or brands from a preset
+- build a draggable brand gallery
+- add undo and redo support
+- let users download the edited image
+- log prompt and output history for debugging
+- open-source the project once it’s stable
