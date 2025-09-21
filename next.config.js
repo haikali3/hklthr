@@ -83,6 +83,10 @@ module.exports = () => {
           protocol: 'https',
           hostname: 'media.licdn.com',
         },
+        {
+          protocol: 'https',
+          hostname: 'cdn.senimaya.com',
+        },
       ],
       unoptimized,
     },
