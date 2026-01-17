@@ -1,0 +1,158 @@
+---
+title: 'Ingesting 50K+ Products with Go: When Suppliers Break Your Schema'
+date: '2026-01-17'
+lastmod: '2026-01-17'
+tags: ['golang', 'data-pipeline', 'database', 'observability']
+draft: false
+summary: 'Different suppliers, different data structures. Built a Go pipeline to normalize, ingest, and monitor 50K+ products using concurrency and batch inserts.'
+---
+
+## Table of Contents
+
+- [The Problem](#the-problem)
+- [Understanding the Source](#understanding-the-source)
+- [The Real Challenge](#the-real-challenge)
+- [How I Built It](#how-i-built-it)
+- [What Worked](#what-worked)
+- [Lessons Learned](#lessons-learned)
+
+---
+
+## The Problem
+
+i started thinking this would be simple: fetch products, clean them, insert them. done.
+
+then i realized **different suppliers have wildly different data structures**. PCNA formats data one way, S&S Activewear another, HIT yet another.
+
+50,000+ products, multiple data sources, all conflicting schemas.
+
+## Understanding the Source
+
+psrestful.com exposes **4 API endpoints**:
+
+1. **Sellables** - list of product IDs
+2. **Media** - images and decoration info
+3. **Pricing & Configuration** - prices, FOB points, currencies
+4. **Inventory** - stock levels by warehouse
+
+the problem: you need **all 4 endpoints for each product**. that's 200K+ API calls for 50K products.
+
+and each supplier returns the data differently:
+
+- **PCNA & HIT** - decorations in an array, clean FOB structure
+- **S&S Activewear** - decorations flattened, FOB format different, location names abbreviated
+
+## The Real Challenge
+
+i couldn't just map one schema to another. i needed to:
+
+1. **fetch data from 4 separate endpoints** (can't do it in one call)
+2. **stitch them together** into a single product record
+3. **normalize across supplier differences** (different field names, structures)
+4. **batch insert 500+ products** at a time
+5. **handle 50K products without hanging the API** (concurrency limits)
+6. **see what's actually failing** (observability)
+
+the first attempt: sequential API calls. **12+ hours for 50K products**. killed it after an hour.
+
+## How I Built It
+
+### Parallel API Fetches
+
+instead of:
+
+```
+fetch media → wait → fetch pricing → wait → fetch inventory
+```
+
+i did:
+
+```
+fetch media, pricing, inventory in parallel
+```
+
+per product, this cut time by 3x.
+
+### 10-Worker Concurrency Pool
+
+used goroutines to process multiple products at once. with 50K products and 4 API endpoints per product, you're looking at 200K+ API calls. doing it sequentially would take 12+ hours.
+
+**10 workers** balanced the load:
+
+- fewer = too slow, hit rate limits
+- more = API rate limiting (429 errors)
+- **10 = sweet spot** - good throughput, API doesn't complain
+
+buffered channels prevented workers from blocking each other.
+
+**note on delta sync:** right now it's a full ingest every time (all 50K products). in the future, delta sync will only fetch products that changed since last run. fewer products = fewer workers needed = faster overall. but full ingest is simpler to reason about.
+
+### Supplier-Specific Normalizers
+
+instead of complex conditionals everywhere:
+
+```go
+normalizer := getNormalizer(supplierCode) // PCNA, HIT, SSA
+normalized := normalizer.Normalize(rawData)
+```
+
+each supplier gets its own parser. keeps logic clean.
+
+### Batch Inserts of 500
+
+tested batch sizes:
+
+- 1000: too many rows per transaction, lock contention
+- **500: goldilocks** - fast enough, memory efficient
+
+each product has ~10+ related records (media, pricing, inventory), so 500 products = ~5000+ rows per batch.
+
+### The Observability Problem
+
+**fastest pipeline in the world is useless if you can't see what's breaking.**
+
+ingested 50K products. everything seemed fine. then noticed products without pricing or inventory. how many? which ones? why?
+
+**no idea.** the pipeline just swallowed failures.
+
+added:
+
+- **structured logging** at every step (fetch, normalize, insert)
+- **metrics by step** - where are products failing?
+- **checkpoints** after each batch (verify data in database)
+
+now i can see:
+
+- if media endpoint is returning errors
+- which supplier has issues
+- exactly which products failed and why
+
+made debugging 100x faster.
+
+## What Worked
+
+- **parallel API fetches per product** - 3x faster than sequential
+- **supplier-specific normalizers** - isolated complexity
+- **10-worker pool** - hit API rate limits sweet spot
+- **batch size 500** - balance speed and transaction load
+- **structured logging everywhere** - caught failures immediately
+- **checkpoints after insert** - verified data got in
+
+## Lessons Learned
+
+**don't do sequential API calls.** with 50K products and 4 endpoints, you're looking at 12+ hours. parallelize.
+
+**test worker counts.** more workers isn't always faster. API rate limits will hurt you. find the sweet spot (for us: 10).
+
+**batch size matters.** if each record has related data, smaller batches might be faster than you think.
+
+**without observability, you're flying blind.** structured logging + metrics + checkpoints turned "something failed" into "product ABC failed at media fetch due to 500 error."
+
+**supplier-specific logic should be isolated.** don't scatter `if supplier == "SSA"` checks everywhere. use a normalizer interface.
+
+## Next
+
+- implement retries with exponential backoff
+- delta sync (right now it's full ingest every time)
+- per-supplier rate limit handling
+- data quality dashboard
