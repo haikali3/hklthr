@@ -1,0 +1,118 @@
+---
+title: 'Wiring Up Observability: Prometheus, Grafana, Jaeger & OpenTelemetry in a Go gRPC System'
+date: '2026-02-19'
+lastmod: '2026-02-19'
+tags: ['golang', 'observability', 'prometheus', 'grafana', 'jaeger', 'opentelemetry', 'grpc']
+draft: false
+summary: 'How I wired up full observability for my Go gRPC job queue system: metrics with Prometheus, dashboards with Grafana, and distributed tracing with OpenTelemetry and Jaeger.'
+---
+
+## Introduction
+
+i had a working gRPC job queue system.
+jobs go in, workers pull them out, results get reported.
+but i had no visibility. no idea what was happening inside.
+so i wired up the full observability stack: metrics, traces, and dashboards.
+here's what i did and what each piece does.
+
+## Table of Contents
+
+- [What Are These Tools](#what-are-these-tools)
+- [Infrastructure Setup](#infrastructure-setup)
+  - [Docker Compose](#docker-compose)
+  - [Prometheus Config](#prometheus-config)
+  - [Grafana Datasources](#grafana-datasources)
+- [Go Code Changes](#go-code-changes)
+  - [Init Tracer in Main](#init-tracer-in-main)
+  - [OTel gRPC Interceptor](#otel-grpc-interceptor)
+  - [Metrics in Handlers](#metrics-in-handlers)
+- [Gotchas I Hit](#gotchas-i-hit)
+- [The Data Flow](#the-data-flow)
+- [Conclusion](#conclusion)
+
+## What Are These Tools
+
+three tools, three different jobs.
+
+- Prometheus: scrapes your `/metrics` endpoint and stores time-series data. It answers, "how many jobs failed in the last hour?"
+- Grafana: connects to Prometheus and Jaeger, then visualizes everything in dashboards. It does not collect anything by itself.
+- OpenTelemetry + Jaeger: OTel instruments your code to produce trace spans. Jaeger receives and stores them. It answers, "why did this specific request take 200ms?"
+
+metrics tell you something is wrong. traces tell you why.
+
+## Infrastructure Setup
+
+### Docker Compose
+
+added three services to `docker-compose.yml`:
+
+- Jaeger (`jaegertracing/all-in-one`): port `4318` for OTLP ingestion and port `16686` for UI.
+- Prometheus (`prom/prometheus`): port `9090`, mounted with a `prometheus.yml` config.
+- Grafana (`grafana/grafana`): port `3000`, mounted with a datasources config file.
+
+### Prometheus Config
+
+`prometheus/prometheus.yml` tells Prometheus where to scrape.
+one scrape job targets `host.docker.internal:9091` since my Go service runs on the host, not inside Docker.
+I used `host.docker.internal` because Prometheus runs in a container and needs to reach the host machine.
+
+### Grafana Datasources
+
+`grafana/datasources.yml` provisions Prometheus and Jaeger as datasources automatically on startup.
+without this, you'd have to manually add them through the Grafana UI every time the container gets recreated.
+it is mounted directly to `/etc/grafana/provisioning/datasources/datasources.yml`.
+
+## Go Code Changes
+
+### Init Tracer in Main
+
+called `observability.InitTracer()` in `cmd/queue/main.go` to start the OTel tracer provider.
+key lesson: call `config.Load()` before `InitTracer()` because `godotenv` loads `.env`, which contains `OTEL_EXPORTER_OTLP_ENDPOINT`.
+if tracer initializes first, it does not know where to send traces.
+
+### OTel gRPC Interceptor
+
+added `grpc.StatsHandler(otelgrpc.NewServerHandler())` to `grpc.NewServer()`.
+this automatically creates a trace span for every incoming gRPC call and propagates trace context.
+no manual span creation needed for basic per-RPC tracing.
+
+### Metrics in Handlers
+
+the `Metrics` struct was already registered with Prometheus counters, gauges, and histograms, but no one was calling `.Inc()`.
+
+- passed `*Metrics` into `ProducerHandler` and `WorkerHandler`
+- `producer_handler.go`: calls `JobsSubmitted.Inc()` after successful enqueue
+- `worker_handler.go`: calls `JobsCompleted.Inc()` or `JobsFailed.Inc()` after confirming operation success
+
+key lesson: increment metrics after the operation succeeds, not before. otherwise you count failed operations as successful.
+
+## Gotchas I Hit
+
+- port conflict: metrics port defaulted to `9090`, same as Prometheus. changed to `9091`.
+- Prometheus target: used `chronos-queue:8080` but the service runs on host. changed to `host.docker.internal:9091`.
+- tracer init ordering: `InitTracer` ran before `config.Load()`, so OTLP endpoint env var was not loaded yet.
+- Jaeger spelling: kept typing `jaegar` instead of `jaeger`, which broke service name resolution.
+- metrics not incrementing: counters were registered but never called in handlers.
+
+## The Data Flow
+
+```text
+queue service
+  ├─ gRPC request comes in
+  │   └─ otelgrpc interceptor creates span -> sends to Jaeger:4318
+  │
+  ├─ handler runs
+  │   └─ increments Prometheus counter (submitted/completed/failed)
+  │
+  └─ /metrics endpoint
+      └─ Prometheus scrapes every minute
+          └─ Grafana queries Prometheus for dashboards
+              └─ Grafana also queries Jaeger to link traces
+```
+
+## Conclusion
+
+observability is not hard to set up. it is just a lot of wiring.
+the tools are straightforward once you understand what each one does.
+Prometheus collects numbers. Jaeger collects request journeys. Grafana shows both.
+now when something breaks, i do not guess; i look at the data.
