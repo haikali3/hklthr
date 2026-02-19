@@ -37,6 +37,7 @@ three tools, three different jobs.
 - Prometheus: scrapes your `/metrics` endpoint and stores time-series data. It answers, "how many jobs failed in the last hour?"
 - Grafana: connects to Prometheus and Jaeger, then visualizes everything in dashboards. It does not collect anything by itself.
 - OpenTelemetry + Jaeger: OTel instruments your code to produce trace spans. Jaeger receives and stores them. It answers, "why did this specific request take 200ms?"
+- My first time looking at Jaegar, and I was impress how it is able to trace request microsecond precision
 
 metrics tell you something is wrong. traces tell you why.
 
@@ -112,7 +113,16 @@ queue service
 
 ## Conclusion
 
-observability is not hard to set up. it is just a lot of wiring.
-the tools are straightforward once you understand what each one does.
-Prometheus collects numbers. Jaeger collects request journeys. Grafana shows both.
-now when something breaks, i do not guess; i look at the data.
+Observability is not hard to set up. It is mostly just a lot of wiring and, in my opinion, can be very tedious.
+
+The tools are straightforward once you understand what each one does.
+Prometheus collects numbers.
+
+Jaeger collects request journeys.
+Grafana shows both.
+
+Now when something breaks, i do not guess, i look at the data.
+
+## Reference
+
+- [chronos-queue](https://github.com/haikali3/chronos-queue)
