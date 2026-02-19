@@ -1,0 +1,197 @@
+---
+title: 'Building Chronos Queue in Go: What I Actually Learned (Without the Buzzwords)'
+date: '2026-02-19'
+lastmod: '2026-02-19'
+tags: ['golang', 'grpc', 'job-queue', 'learning', 'backend']
+draft: false
+summary: 'I built a queue service from scratch and learned the hard parts the real way: exponential backoff, contention between workers, and how job claiming should work when multiple queue instances run at once.'
+---
+
+## Introduction
+
+i built this project because i wanted to understand queues for real, not just call a managed service and pretend i know what is happening.
+
+at first it looked easy:
+
+- submit job
+- worker picks job
+- mark done
+
+then reality happened. retries. duplicate jobs. worker contention. multiple instances claiming at the same time.
+that is where the real learning started.
+
+## What I Built (Simple Version)
+
+three moving parts:
+
+- producer: sends jobs
+- queue service: stores jobs and decides who gets what
+- worker: polls and executes jobs
+
+all connected with gRPC, backed by PostgreSQL.
+
+## Quick Sketch
+
+```text
+client -> producer -> queue service -> postgres
+                         |
+                         v
+                      workers (many)
+```
+
+this small diagram is basically the whole system.
+
+## Where It Got Real
+
+### 1. Exponential Backoff (the part i finally understood)
+
+when a job fails, retrying immediately is usually the worst move.
+i used to think "just retry now" was fine. it is not.
+
+we added exponential backoff so retry delay grows each attempt.
+example idea:
+
+- retry 1: wait 2s
+- retry 2: wait 4s
+- retry 3: wait 8s
+
+why this helped:
+
+- gives downstream systems breathing room
+- reduces repeated hammering when something is already broken
+- smooths traffic spikes
+
+this was a big mindset shift for me: retries are not just "try again," they are a control system.
+
+### 2. Contention ("contentation" in my notes)
+
+contention showed up fast when multiple workers started polling at the same time.
+without protection, two workers can try to grab the same job.
+
+that created race-condition behavior i could not ignore.
+so claiming had to become atomic, not "best effort."
+
+the learning: concurrency bugs are not loud. they are subtle and expensive.
+
+### 3. Claim Contract + Lease Thinking
+
+i started thinking of claiming as a contract:
+
+- queue says: "you own this job now"
+- worker says: "i will complete or fail it"
+
+when there are multiple queue/worker instances, this contract matters even more.
+one job must be claimed by one worker at a time, period.
+
+and this opened the next design thought: lease/visibility timeout.
+if a worker claims a job and dies, the job should come back after lease expiry instead of being stuck forever.
+
+i did not start with full lease logic, but thinking in "lease contract" terms made the system design cleaner.
+
+## Multiple Queue Instances: Claimed By Who?
+
+this question forced me to stop being casual.
+
+if 3 instances are running, and each asks for work, we need clear ownership.
+
+```text
+instance A -> claim job #42 (success)
+instance B -> claim job #42 (must fail / skip)
+instance C -> claim next available job
+```
+
+this is where proper DB-level claim strategy matters, otherwise duplicate processing happens.
+and duplicate processing means broken trust in the system.
+
+## 5 Things That Made This Feel Real
+
+### 1. Reliability
+
+this is the boring word that saves you in real life.
+
+- durable storage: jobs live in Postgres, not memory vibes.
+- crash recovery: if a process dies, jobs are still there after restart.
+- retry and backoff: we stop panic-retrying.
+
+fun way i think about backoff:
+
+```text
+first fail: "aight, chill 2 seconds"
+second fail: "still broken? chill 4 seconds"
+third fail: "ok bro, 8 seconds and reflect on life"
+```
+
+same concept, less drama in production.
+
+### 2. Consistency
+
+if job state can jump randomly, everything becomes guesswork.
+
+- state machine enforcement: only valid transitions are allowed.
+- idempotency: same request should not create duplicate jobs.
+- row-level locking: two workers cannot "win" the same job claim.
+
+this is what turns "probably works" into "predictably works."
+
+### 3. Scalability
+
+more traffic means more workers, but scaling is not just "spawn and pray."
+
+- horizontal workers: add instances when load rises.
+- worker pools: control concurrency per instance.
+- backpressure: when system is overloaded, slow intake instead of exploding.
+
+for me this was huge: stable throughput beats fake peak speed.
+
+### 4. Fault Tolerance
+
+failure is normal, so recovery path must be normal too.
+
+- visibility timeout: claimed jobs are not lost forever.
+- heartbeat: workers prove they are still alive.
+- reclaiming stuck work: dead worker's job returns to the queue.
+
+this is the lease-contract idea in action, not just theory.
+
+### 5. Coordination Without Consensus
+
+i liked this idea a lot: coordinate through data rules, not a central boss.
+
+- database locking for safe claiming across many workers.
+- Redis TTL locks as an option for short-lived distributed lock use cases.
+- lease-based processing so ownership has expiry, not infinite trust.
+
+no leader election ceremony needed for the core claim path.
+the database (or lock store) is the shared truth.
+
+## Things I Removed From My Thinking
+
+- "just add more workers" solves everything
+- "retry fast" is always better
+- "it worked locally" means it is correct
+
+none of these survive real concurrency.
+
+## What I Kept
+
+- keep core flow simple
+- make ownership explicit
+- treat retries as policy, not afterthought
+- design with failure in mind from day one
+
+## Conclusion
+
+i started this queue project to practice backend development.
+i ended up learning system behavior under pressure.
+
+the biggest lessons were not syntax:
+
+- exponential backoff changes failure behavior
+- contention is guaranteed once you scale workers
+- claiming needs a clear contract, especially with multiple instances
+
+that is the part i will carry into every distributed system i build next.
+
+## Reference
+
+- [chronos-queue](https://github.com/haikali3/chronos-queue)
