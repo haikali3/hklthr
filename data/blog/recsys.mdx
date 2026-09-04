@@ -134,46 +134,6 @@ run 3: "the number went down" -> this was the first honest one
 
 going down is what "actually working" looked like, once the test stopped lying. that's a hard thing to feel good about in the moment, and exactly the thing you have to feel good about anyway.
 
-## 5 Things That Made This Feel Real
-
-### 1. Reliability of the Measurement, Not Just the Model
-
-the boring lesson that saves you every time: your evaluator is part of the system under test.
-
-- fixed early stopping: stop on the metric you actually report, not a convenient proxy.
-- fixed tie-breaking: no free wins from identical scores.
-- re-ran every previous "good" result through the honest pipeline before trusting any of them.
-
-### 2. Consistency
-
-if "good" can mean different things depending on which code path measured it, nothing is comparable.
-
-- one evaluation function, used everywhere: training, tuning, and reporting.
-- no double-crediting: ties get split credit, not full credit for everyone involved.
-- re-checked historical checkpoints under the same honest rules instead of grandfathering old numbers in.
-
-### 3. Not Scaling a Bug
-
-more tuning trials just means more chances for a broken metric to find and exploit its own hole faster.
-
-- a hyperparameter search is only as honest as the function it's optimizing against.
-- "the tuner found a great config" is not evidence the config is great, it's evidence the tuner is good at its job, whatever that job actually is.
-
-### 4. Catching Yourself Before You Ship
-
-the failure mode here is silent. nothing crashes. nothing throws. the number just looks fantastic.
-
-- treat suspiciously good results as a bug report against your own eval code, not a win to announce yet.
-- reproduce the "great" result from scratch before trusting it survives.
-- when a model's behavior looks weirdly uniform (same score for everything), go looking for what's rewarding that uniformity.
-
-### 5. Shipping the Boring Number
-
-no fireworks needed for real progress to count.
-
-- an honest, modest score is worth more than an exciting one that doesn't survive a second look
-- the model that beat the live heuristic by a real, reproducible margin - not a flashy one, a boring one that held up - is the one that shipped
-
 ## Things I Removed From My Thinking
 
 - "a high score means the model understood the task"
@@ -200,6 +160,7 @@ the lessons that stuck:
 - a score going down after a fix can be the most honest progress you make all week
 
 that's the part i'm carrying into every model i build next, recsys or otherwise.
+i'm planning to buy a new pc with decent gpu so i can explore more on deep learning based recommendation systems. i want to see if i can get a two-tower model to work with more data and better features, but for now, the honest numbers are what matter.
 
 ## Reference
 
