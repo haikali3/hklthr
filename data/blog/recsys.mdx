@@ -10,6 +10,7 @@ summary: 'I spent 5 days tuning rounds celebrating a great NDCG score before rea
 ## Table of Contents
 
 - [Introduction](#introduction)
+- [The Two-Tower Detour](#the-two-tower-detour)
 - [What I Built (Simple Version)](#what-i-built-simple-version)
 - [Quick Sketch](#quick-sketch)
 - [Where It Got Real](#where-it-got-real)
@@ -22,7 +23,7 @@ summary: 'I spent 5 days tuning rounds celebrating a great NDCG score before rea
 
 ## Introduction
 
-i built a recommendation model for a video app because i wanted to actually understand recsys, not just call a managed API and nod along.
+i built a recommendation model for a video app because i wanted to actually understand recsys **(Recommendation System)**, not just call a managed API and nod along.
 
 at first it looked easy:
 
@@ -31,6 +32,32 @@ at first it looked easy:
 - number go up, ship it
 
 then reality happened. the number kept going up in ways that felt too good. turns out the thing lying to me wasn't the model. it was my own evaluation code
+
+## The Two-Tower Detour
+
+before any of the eval drama, i made a bigger mistake first: model choice.
+
+i'd seen netflix and tiktok talk about two-tower neural networks for retrieval, so that's what i built. user tower, item tower, embeddings, dot product. felt like the "real" recsys architecture, the one actual big companies use.
+
+it barely beat random.
+
+took me longer than i'd like to admit to see why: netflix and tiktok train two-tower models on hundreds of millions to billions of interactions. i had a few thousand. there wasn't enough signal for the embeddings to learn anything structured, so they just collapsed toward noise, mostly re-deriving popularity through a much more expensive path.
+
+i dropped the two-tower idea and looked at gradient-boosted trees instead, since they're known to work well on small, tabular data. still had to pick one: AdaBoost, XGBoost, or LightGBM.
+
+- [**AdaBoost**](https://en.wikipedia.org/wiki/AdaBoost): oldest of the three, reweights misclassified examples each round. simple, but weaker on this kind of ranking task and slower to get right.
+- [**XGBoost**](https://xgboost.readthedocs.io/): the popular default, strong and well-documented, but heavier to set up and slower to train than i needed for a project this size.
+- [**LightGBM**](https://lightgbm.readthedocs.io/): also gradient-boosted trees, but grows leaf-wise instead of level-wise, so it trains faster and uses less memory on the same data. it also has a built-in `lambdarank` objective, made exactly for ranking problems like this one.
+
+went with LightGBM. fast to train, small enough to iterate on quickly, and the ranking objective was already there instead of something i'd have to bolt on.
+
+why this mattered:
+
+- copying a company's model architecture without copying their data scale is copying the wrong variable
+- neural embeddings need volume to be worth their variance. small data plus a high-capacity model gets you memorization or noise, not generalization
+- when picking between similar tools, the one that lets you train and iterate fastest usually wins early on, you can always swap it later once you actually know what you need
+
+mindset shift: "what does netflix use" is the wrong question when you don't have netflix's data. the right question is "what works with the data i actually have."
 
 ## What I Built (Simple Version)
 
@@ -71,23 +98,19 @@ why this mattered:
 
 mindset shift: your early-stopping metric and your reporting metric have to be the same metric, or you're tuning blind.
 
-### 2. Tie-Breaking Let the Model Cheat
+### 2. Measuring Time and Position, Not Just Counts
 
-this one's my favorite because it's so simple in hindsight.
+at first my features were basic: video metadata, watch history, raw view count, tag overlap from search. simple counts, no sense of _when_ or _where_ those counts applied.
 
-my ranking function computed `rank = 1 + count(scores > positive_score)` strictly greater than. sounds fine. it is not fine if the model can output the _same_ score for a big pile of videos.
+problem: a video's live `view_count` is a running total as of today, not as of the moment a given user actually saw it. training on that leaks the future into the past, the feature already "knows" popularity the interaction couldn't have known yet. worse, a brand-new video reads as 0 views forever off that live column, so it stays buried by the popularity feature no matter how good it turns out to be.
 
-if the model dumps fifty candidates into one identical score, and the true positive is in that pile, nothing scored strictly higher than it, so it "ranked" #1. every time. for free.
-
-the tuner found this. it produced a model that gave its entire top ~50 candidates the exact same score. that model reported a fantastic NDCG. once i fixed tie-breaking to split credit properly across a tied group instead of letting ties round down to first place, that same model scored a flat zero.
-
-zero. not "worse." zero. the model had learned nothing except how to exploit a strict-inequality bug.
+fix: switched to point-in-time features. instead of the live cumulative `view_count`, i built `video_view_count_pit`, the number of views strictly before that interaction happened, computed per interaction off timestamped view history. same idea for exposure position: `rank_in_surface` records exactly where a video sat in the feed when it was shown, so i know whether it was ranked #1 or buried at #40, not just that it was shown at all.
 
 why this mattered:
 
-- a model that looks amazing across the board should make you _more_ suspicious, not less
-- "the tuner found a great solution" and "the tuner found a hole in my grading code" look identical from the outside
-- fix: `rank = (strictly higher count) + (tie group size + 1) / 2` mid-rank tie handling, the standard fix, which i apparently had to relearn the hard way
+- a feature computed "as of today" instead of "as of the moment that matters" is a leak, even when it looks like a normal aggregate
+- point-in-time counts fix cold start too: a new video isn't stuck at 0 forever, it's scored on however many views it genuinely had by that point
+- `rank_in_surface` separates "this video failed because no one wanted it" from "this video failed because it was buried and barely seen" - two different problems that look identical without position data
 
 ### 3. The Popularity Shortcut
 
