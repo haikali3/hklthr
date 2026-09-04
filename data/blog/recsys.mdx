@@ -1,0 +1,183 @@
+---
+title: 'I wish I knew better, coming from SWE, I thought a good score meant good model'
+date: '2026-09-04'
+lastmod: '2026-09-04'
+tags: ['machine-learning', 'recommendation-systems', 'lightgbm', 'learning', 'backend']
+draft: false
+summary: 'I spent 5 days tuning rounds celebrating a great NDCG score before realizing the evaluator itself was broken. This is what i wish knew earlier'
+---
+
+## Table of Contents
+
+- [Introduction](#introduction)
+- [What I Built (Simple Version)](#what-i-built-simple-version)
+- [Quick Sketch](#quick-sketch)
+- [Where It Got Real](#where-it-got-real)
+- [Honest vs. Fake: A Timeline](#honest-vs-fake-a-timeline)
+- [5 Things That Made This Feel Real](#5-things-that-made-this-feel-real)
+- [Things I Removed From My Thinking](#things-i-removed-from-my-thinking)
+- [What I Kept](#what-i-kept)
+- [Conclusion](#conclusion)
+- [Reference](#reference)
+
+## Introduction
+
+i built a recommendation model for a video app because i wanted to actually understand recsys, not just call a managed API and nod along.
+
+at first it looked easy:
+
+- train a ranker
+- compute NDCG
+- number go up, ship it
+
+then reality happened. the number kept going up in ways that felt too good. turns out the thing lying to me wasn't the model. it was my own evaluation code
+
+## What I Built (Simple Version)
+
+three moving parts:
+
+- features: popularity, watch history, tag overlap, user/video stats
+- model: LightGBM with a lambdarank objective
+- eval: per-user recall@k / NDCG@k on a time-based split (train on older data, validate on the newest slice)
+
+that last part sounds boring. it is where all the actual story happened.
+
+## Quick Sketch
+
+```text
+interactions -> features -> lambdarank model -> ranked candidates -> NDCG@k
+                                                        ^
+                                          (this box was broken for weeks)
+```
+
+this small diagram is basically the whole post.
+
+## Where It Got Real
+
+### 1. Early Stopping on the Wrong Metric
+
+when tuning a model, you need something to decide "stop training now, you're done."
+i used LightGBM's built-in pairwise NDCG for that. seemed reasonable. it was not.
+
+the built-in metric peaked after about three boosting rounds at a high learning rate, so every "tuned" model the search produced was three trees deep, and the tuner just kept cranking the learning rate to its ceiling because that's what the (wrong) metric rewarded.
+
+this produced a couple of really exciting scores that were, on reflection, complete nonsense.
+
+why this mattered:
+
+- optimizing metric A while reporting metric B means you're not actually tuning what you think you're tuning
+- a metric that peaks suspiciously fast is a metric worth interrogating, not celebrating
+- the fix was a custom callback that evaluates the _real_ dedup NDCG every 10 rounds and stops on that, instead of trusting the builtin
+
+mindset shift: your early-stopping metric and your reporting metric have to be the same metric, or you're tuning blind.
+
+### 2. Tie-Breaking Let the Model Cheat
+
+this one's my favorite because it's so simple in hindsight.
+
+my ranking function computed `rank = 1 + count(scores > positive_score)` strictly greater than. sounds fine. it is not fine if the model can output the _same_ score for a big pile of videos.
+
+if the model dumps fifty candidates into one identical score, and the true positive is in that pile, nothing scored strictly higher than it, so it "ranked" #1. every time. for free.
+
+the tuner found this. it produced a model that gave its entire top ~50 candidates the exact same score. that model reported a fantastic NDCG. once i fixed tie-breaking to split credit properly across a tied group instead of letting ties round down to first place, that same model scored a flat zero.
+
+zero. not "worse." zero. the model had learned nothing except how to exploit a strict-inequality bug.
+
+why this mattered:
+
+- a model that looks amazing across the board should make you _more_ suspicious, not less
+- "the tuner found a great solution" and "the tuner found a hole in my grading code" look identical from the outside
+- fix: `rank = (strictly higher count) + (tie group size + 1) / 2` mid-rank tie handling, the standard fix, which i apparently had to relearn the hard way
+
+### 3. The Popularity Shortcut
+
+even with an honest eval, there was a quieter problem: random negative sampling.
+
+if you sample negatives uniformly from the whole catalog, you're mostly sampling low-view videos, because most videos have low views. so "rank whatever has more views higher" separates positives from negatives almost every time, with zero actual personalization required. the model took that shortcut immediately and became, by feature importance, a popularity ranker wearing a recsys costume.
+
+fix: sample some negatives proportional to view count instead of uniformly, so popular videos land on both sides of the comparison and the model actually has to discriminate between them using something other than "big number good."
+
+net effect: the honest validation score didn't move. but the _reason_ it scored what it scored changed completely, personalization features went from background noise to meaningfully load-bearing. same grade, very different homework.
+
+## Honest vs. Fake: A Timeline
+
+this is the part that still makes me wince a little.
+
+```text
+run 1: "great score" -> was optimizing the wrong early-stop metric
+run 2: "even better score" -> was exploiting a tie-breaking bug (real score: zero)
+run 3: "the number went down" -> this was the first honest one
+```
+
+going down is what "actually working" looked like, once the test stopped lying. that's a hard thing to feel good about in the moment, and exactly the thing you have to feel good about anyway.
+
+## 5 Things That Made This Feel Real
+
+### 1. Reliability of the Measurement, Not Just the Model
+
+the boring lesson that saves you every time: your evaluator is part of the system under test.
+
+- fixed early stopping: stop on the metric you actually report, not a convenient proxy.
+- fixed tie-breaking: no free wins from identical scores.
+- re-ran every previous "good" result through the honest pipeline before trusting any of them.
+
+### 2. Consistency
+
+if "good" can mean different things depending on which code path measured it, nothing is comparable.
+
+- one evaluation function, used everywhere: training, tuning, and reporting.
+- no double-crediting: ties get split credit, not full credit for everyone involved.
+- re-checked historical checkpoints under the same honest rules instead of grandfathering old numbers in.
+
+### 3. Not Scaling a Bug
+
+more tuning trials just means more chances for a broken metric to find and exploit its own hole faster.
+
+- a hyperparameter search is only as honest as the function it's optimizing against.
+- "the tuner found a great config" is not evidence the config is great, it's evidence the tuner is good at its job, whatever that job actually is.
+
+### 4. Catching Yourself Before You Ship
+
+the failure mode here is silent. nothing crashes. nothing throws. the number just looks fantastic.
+
+- treat suspiciously good results as a bug report against your own eval code, not a win to announce yet.
+- reproduce the "great" result from scratch before trusting it survives.
+- when a model's behavior looks weirdly uniform (same score for everything), go looking for what's rewarding that uniformity.
+
+### 5. Shipping the Boring Number
+
+no fireworks needed for real progress to count.
+
+- an honest, modest score is worth more than an exciting one that doesn't survive a second look
+- the model that beat the live heuristic by a real, reproducible margin - not a flashy one, a boring one that held up - is the one that shipped
+
+## Things I Removed From My Thinking
+
+- "a high score means the model understood the task"
+- "if the tuner found it automatically, it must be a genuine improvement"
+- "a model that performs uniformly well everywhere is a strong, general model"
+
+none of these survive an honest metric.
+
+## What I Kept
+
+- interrogate your evaluation code with the same suspicion you'd apply to the model
+- reproduce a "great" result before believing it
+- treat a too-perfect score as a bug report, not a milestone
+- design your eval to fail loudly, not to accidentally reward laziness
+
+## Conclusion
+
+i started this project to learn recsys. i ended up learning that the eval pipeline deserves as much scrutiny as the model itself, because a broken metric doesn't fail, it just quietly agrees with whatever you did.
+
+the lessons that stuck:
+
+- your early-stopping metric and your reported metric must be the same function
+- tie-breaking bugs are free wins for a model, and free wins are a red flag
+- a score going down after a fix can be the most honest progress you make all week
+
+that's the part i'm carrying into every model i build next, recsys or otherwise.
+
+## Reference
+
+- full findings and honest numbers available on request
